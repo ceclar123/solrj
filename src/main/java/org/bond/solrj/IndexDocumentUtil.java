@@ -1,27 +1,13 @@
 package org.bond.solrj;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest.METHOD;
-import org.apache.solr.client.solrj.SolrServer;
-import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.request.AbstractUpdateRequest;
 import org.apache.solr.client.solrj.request.ContentStreamUpdateRequest;
-import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrDocumentList;
-import org.apache.solr.common.params.SolrParams;
 
-public class IndexDocumentUtil {
+public class IndexDocumentUtil extends CommonIndexUtil {
 	private static final Logger LOG = Logger.getLogger(IndexDocumentUtil.class);
-	private SolrServer solrServer = null;
-	private ContentStreamUpdateRequest req = null;
 
 	/**
 	 * @param url
@@ -29,8 +15,7 @@ public class IndexDocumentUtil {
 	 *            http://localhost:8080/solr/book
 	 * **/
 	public IndexDocumentUtil(String url) {
-		solrServer = new HttpSolrServer(url);
-		req = new ContentStreamUpdateRequest("/update/extract");
+		super(url);
 	}
 
 	/**
@@ -42,7 +27,11 @@ public class IndexDocumentUtil {
 	public void indexFolder(File folder) throws Exception {
 		if (folder.isDirectory()) {
 			for (File item : folder.listFiles()) {
-				indexFile(item);
+				if (item.isDirectory()) {
+					indexFolder(item);
+				} else if (item.isFile()) {
+					indexFile(item);
+				}
 			}
 		} else if (folder.isFile()) {
 			indexFile(folder);
@@ -70,23 +59,28 @@ public class IndexDocumentUtil {
 		String filePath = file.getAbsolutePath();
 		String fileName = file.getName();
 
-		LOG.info(fileName);
-
 		int index = fileName.lastIndexOf(".");
 		if (index < 0 || index > fileName.length() - 1) {
-			throw new Exception("文件名格式不正确");
+			// throw new Exception("文件名格式不正确");
+			LOG.info("文件名格式不正确:" + fileName);
+			return;
 		}
+
 		String suffixName = fileName.substring(index + 1);
 		String mimeType = MimeTypeUtil.getMimeType(suffixName);
 
 		if (mimeType == null || mimeType.length() == 0) {
-			throw new Exception("该文件类型不支持");
+			// throw new Exception("该文件类型不支持");
+			LOG.info("该文件类型不支持:" + fileName);
+			return;
 		}
 
-		String id = fileName + String.valueOf(java.util.Calendar.getInstance().getTimeInMillis());
+		// String.valueOf(java.util.Calendar.getInstance().getTimeInMillis());
+		String id = filePath;
 		solrServer.deleteById(id);
 
-		req.addFile(file, mimeType);
+		ContentStreamUpdateRequest req = new ContentStreamUpdateRequest("/update/extract");
+		req.addFile(file, mimeType.toLowerCase());
 		req.setParam("literal.id", id);
 		req.setParam("literal.title", fileName);
 		req.setParam("literal.summary", filePath);
@@ -95,6 +89,8 @@ public class IndexDocumentUtil {
 		req.setAction(AbstractUpdateRequest.ACTION.COMMIT, true, true);
 
 		solrServer.request(req);
+
+		LOG.info("index done:" + filePath);
 	}
 
 	/**
@@ -108,119 +104,4 @@ public class IndexDocumentUtil {
 		indexFile(file);
 	}
 
-	/**
-	 * Detele lucene by ID
-	 * 
-	 * @param id
-	 */
-	public void deleteById(String id) throws Exception {
-		solrServer.deleteById(id);
-	}
-
-	/**
-	 * Detele lucene by ID
-	 * 
-	 * @param id
-	 * @param commitWithinMs
-	 *            多少毫秒之内提交
-	 */
-	public void deleteById(String id, int commitWithinMs) throws Exception {
-		solrServer.deleteById(id, commitWithinMs);
-	}
-
-	/**
-	 * Detele lucene by IDs.
-	 * 
-	 * @param strings
-	 */
-	public void deleteById(List<String> strings) throws Exception {
-		solrServer.deleteById(strings);
-	}
-
-	/**
-	 * Detele lucene by IDs.
-	 * 
-	 * @param strings
-	 * @param commitWithinMs
-	 *            多少毫秒之内提交
-	 */
-	public void deleteById(List<String> strings, int commitWithinMs) throws Exception {
-		solrServer.deleteById(strings, commitWithinMs);
-	}
-
-	/**
-	 * Detele lucene by query.
-	 * 
-	 * @param query
-	 *            查询条件
-	 */
-	public void deleteByQuery(String query) throws Exception {
-		solrServer.deleteByQuery(query);
-	}
-
-	/**
-	 * Detele lucene by query.
-	 * 
-	 * @param query
-	 *            查询条件
-	 * @param commitWithinMs
-	 *            多少毫秒之内提交
-	 */
-	public void deleteByQuery(String query, int commitWithinMs) throws Exception {
-		solrServer.deleteByQuery(query, commitWithinMs);
-	}
-
-	/**
-	 * Query.
-	 * 
-	 * @param params
-	 *            查询参数
-	 * @param fields
-	 *            返回字段
-	 * @return
-	 */
-	public List<Map<String, Object>> query(SolrParams params, String[] fields) throws Exception {
-		List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
-
-		SolrDocumentList documents = solrServer.query(params).getResults();
-		Iterator<SolrDocument> iter = documents.iterator();
-		while (iter.hasNext()) {
-			SolrDocument doc = iter.next();
-			Map<String, Object> map = new HashMap<String, Object>();
-			for (String field : fields) {
-				map.put(field, doc.getFieldValue(field));
-			}
-			results.add(map);
-		}
-
-		return results;
-	}
-
-	/**
-	 * Commit.
-	 * 
-	 * @param waitFlush
-	 *            block until index changes are flushed to disk
-	 * @param waitSearcher
-	 *            block until a new searcher is opened and registered as the
-	 *            main query searcher, making the changes visible
-	 */
-	public void commit(boolean waitFlush, boolean waitSearcher) throws Exception {
-		solrServer.commit(waitFlush, waitSearcher);
-	}
-
-	/**
-	 * When controlling the optimizing action at client side, finally execute
-	 * optimizing.
-	 * 
-	 * @param waitFlush
-	 *            block until index changes are flushed to disk
-	 * @param waitSearcher
-	 *            block until a new searcher is opened and registered as the
-	 *            main query searcher, making the changes visible
-	 */
-	public void optimize(boolean waitFlush, boolean waitSearcher) throws Exception {
-		solrServer.optimize(waitFlush, waitSearcher);
-		commit(waitFlush, waitSearcher);
-	}
 }

@@ -38,6 +38,6 @@ public class MimeTypeUtil {
 	 *            文件后缀名 doc,docx
 	 * */
 	public static String getMimeType(String suffixName) {
-		return mimeMap.get(suffixName).toLowerCase();
+		return mimeMap.get(suffixName);
 	}
 }
