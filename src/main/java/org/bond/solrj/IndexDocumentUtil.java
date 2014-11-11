@@ -30,7 +30,11 @@ public class IndexDocumentUtil extends CommonIndexUtil {
 				if (item.isDirectory()) {
 					indexFolder(item);
 				} else if (item.isFile()) {
-					indexFile(item);
+					try {
+						indexFile(item);
+					} catch (Exception ex) {
+						LOG.error(ex);
+					}
 				}
 			}
 		} else if (folder.isFile()) {
@@ -59,10 +63,12 @@ public class IndexDocumentUtil extends CommonIndexUtil {
 		String filePath = file.getAbsolutePath();
 		String fileName = file.getName();
 
+		LOG.debug("index begin:" + filePath);
+
 		int index = fileName.lastIndexOf(".");
 		if (index < 0 || index > fileName.length() - 1) {
 			// throw new Exception("文件名格式不正确");
-			LOG.info("文件名格式不正确:" + fileName);
+			LOG.debug("文件名格式不正确:" + fileName);
 			return;
 		}
 
@@ -71,7 +77,7 @@ public class IndexDocumentUtil extends CommonIndexUtil {
 
 		if (mimeType == null || mimeType.length() == 0) {
 			// throw new Exception("该文件类型不支持");
-			LOG.info("该文件类型不支持:" + fileName);
+			LOG.debug("该文件类型不支持:" + fileName);
 			return;
 		}
 
@@ -90,7 +96,7 @@ public class IndexDocumentUtil extends CommonIndexUtil {
 
 		solrServer.request(req);
 
-		LOG.info("index done:" + filePath);
+		LOG.debug("index done:" + filePath);
 	}
 
 	/**
